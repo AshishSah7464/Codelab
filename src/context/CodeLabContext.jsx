@@ -6,23 +6,33 @@ const CodeLabContext = createContext();
 const STORAGE_KEY = 'codelab_saved_projects_v1';
 const CURRENT_PROJECT_KEY = 'codelab_active_draft_v1';
 
-export const CodeLabProvider = ({ children }) => {
-  // Default initial playground code
-  const defaultTemplate = templates[0];
+// Synchronous helper to retrieve active draft before initial render
+const getInitialDraft = () => {
+  try {
+    const stored = localStorage.getItem(CURRENT_PROJECT_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {}
+  return null;
+};
 
-  const [html, setHtml] = useState(defaultTemplate.html);
-  const [css, setCss] = useState(defaultTemplate.css);
-  const [js, setJs] = useState(defaultTemplate.js);
+export const CodeLabProvider = ({ children }) => {
+  const defaultTemplate = templates[0];
+  const initialDraft = getInitialDraft();
+
+  // Initialize state synchronously from draft or default template
+  const [html, setHtml] = useState(() => (initialDraft && typeof initialDraft.html === 'string') ? initialDraft.html : defaultTemplate.html);
+  const [css, setCss] = useState(() => (initialDraft && typeof initialDraft.css === 'string') ? initialDraft.css : defaultTemplate.css);
+  const [js, setJs] = useState(() => (initialDraft && typeof initialDraft.js === 'string') ? initialDraft.js : defaultTemplate.js);
 
   const [activeTab, setActiveTab] = useState('html'); // 'html' | 'css' | 'js' | 'console'
   const [theme, setTheme] = useState(() => localStorage.getItem('codelab_theme') || 'dark');
   const [autoRun, setAutoRun] = useState(true);
   const [layout, setLayout] = useState('split'); // 'split' | 'tabs' | 'preview'
 
-  const [projectName, setProjectName] = useState('Playground');
+  const [projectName, setProjectName] = useState(() => (initialDraft && initialDraft.projectName) ? initialDraft.projectName : 'Playground');
   const [projectDescription, setProjectDescription] = useState('My awesome web experiment');
   const [projectTags, setProjectTags] = useState(['web', 'starter']);
-  const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [currentProjectId, setCurrentProjectId] = useState(() => initialDraft?.currentProjectId || null);
 
   const [savedProjects, setSavedProjects] = useState(() => {
     try {
@@ -49,24 +59,7 @@ export const CodeLabProvider = ({ children }) => {
     localStorage.setItem('codelab_theme', theme);
   }, [theme]);
 
-  // Restore active draft if available
-  useEffect(() => {
-    try {
-      const storedDraft = localStorage.getItem(CURRENT_PROJECT_KEY);
-      if (storedDraft) {
-        const draft = JSON.parse(storedDraft);
-        setHtml(draft.html || defaultTemplate.html);
-        setCss(draft.css || defaultTemplate.css);
-        setJs(draft.js || defaultTemplate.js);
-        if (draft.projectName) setProjectName(draft.projectName);
-        if (draft.currentProjectId) setCurrentProjectId(draft.currentProjectId);
-      }
-    } catch (e) {
-      console.error('Failed to load active draft:', e);
-    }
-  }, []);
-
-  // Save active draft on changes (debounced)
+  // Save active draft instantly on changes so page refresh never loses code
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -75,7 +68,7 @@ export const CodeLabProvider = ({ children }) => {
           updatedAt: new Date().toISOString()
         }));
       } catch (e) {}
-    }, 800);
+    }, 200);
     return () => clearTimeout(timer);
   }, [html, css, js, projectName, currentProjectId]);
 
@@ -118,7 +111,7 @@ export const CodeLabProvider = ({ children }) => {
     setHtml(defaultTemplate.html);
     setCss(defaultTemplate.css);
     setJs(defaultTemplate.js);
-    setProjectName('Untitled Playground');
+    setProjectName('Playground');
     setCurrentProjectId(null);
     clearConsole();
     runCode();
